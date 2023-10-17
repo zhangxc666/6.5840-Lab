@@ -47,7 +47,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		reply := Task{}
 		ok := CallGetTask(&req, &reply)
 		if ok != nil {
-			panic(ok)
+			return
 		}
 		if reply.Type == 3 { // 当前已经结束
 			return
@@ -62,6 +62,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 				if err != nil {
 					fmt.Println("文件读取失败")
 					panic(err)
+					continue
 				}
 				kva := mapf(fileName, string(data))
 				tempFileList := []*os.File{}
@@ -81,6 +82,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 					if err := enc.Encode(v); err != nil {
 						fmt.Println("写入临时文件失败")
 						panic(err)
+						return
 					}
 				}
 				for _, file := range tempFileList {
@@ -88,7 +90,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 				}
 				timeStamp := getTimeStamp()
 				if timeStamp-reply.TimeStamp > 10*1000 {
-					fmt.Printf("ID为 %v 任务已超时\n", ID)
+					//fmt.Printf("ID为 %v 任务已超时\n", ID)
 					for _, v := range tempFileList {
 						os.Remove(v.Name())
 					}
@@ -110,13 +112,24 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 						err = os.Rename(file.Name(), "./"+newFileName)
 						if err != nil {
 							panic(err)
+							return
 						}
+					}
+					ask = Ask{
+						ID:        ID,
+						TimeStamp: -1,
+					}
+					res = Response{}
+					err = CallTaskIsFinished(&ask, &res)
+					if err != nil {
+						return
 					}
 				} else {
 					fmt.Printf("ID为 %v 任务已超时\n", ID)
 					for _, v := range tempFileList {
 						os.Remove(v.Name())
 					}
+					continue
 				}
 
 			} else { // reduce任务
@@ -126,6 +139,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 					file, err := os.Open(fileName)
 					if err != nil {
 						panic(err)
+						return
 					}
 					dec := json.NewDecoder(file)
 					for {
@@ -138,10 +152,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 					file.Close()
 				}
 				sort.Sort(ByKey(intermediate))
-				tempFile, err := ioutil.TempFile("", "zxc666")
-				if err != nil {
-					panic(err)
-				}
+				tempFile, _ := ioutil.TempFile("", "zxc666")
 				i := 0
 				for i < len(intermediate) {
 					j := i + 1
@@ -163,9 +174,10 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 					TimeStamp: timeStamp,
 				}
 				res := Response{}
-				err = CallTaskIsFinished(&ask, &res)
+				err := CallTaskIsFinished(&ask, &res)
 				if err != nil {
 					panic(err)
+					return
 				}
 				if res.OK {
 					oname := "./mr-out-" + strconv.Itoa(ID)
@@ -185,7 +197,7 @@ func CallGetTask(request *Request, reply *Task) error { // 向coordinator获取�
 	if ok {
 		// reply.Y should be 100.
 		//fmt.Println(*reply)
-		fmt.Printf("Get the task's name is %v\n", reply.FileName)
+		//fmt.Printf("Get the task's name is %v\n", reply.FileName)
 		return nil
 	} else {
 		fmt.Printf("Call failed!\n")
@@ -196,7 +208,7 @@ func CallGetTask(request *Request, reply *Task) error { // 向coordinator获取�
 func CallTaskIsFinished(ask *Ask, res *Response) error {
 	ok := call("Coordinator.AskTask", ask, res)
 	if ok {
-		fmt.Printf("The %v task is finished\n", ask.ID)
+		//fmt.Printf("The %v task is finished\n", ask.ID)
 		return nil
 	} else {
 		fmt.Printf("Call Task is finished failed!\n")

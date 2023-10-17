@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -88,6 +87,9 @@ func (c *Coordinator) Done() bool {
 	}
 	c.timeMutex.Unlock()
 	defer c.stateMutex.Unlock()
+	if c.state == 2 {
+		time.Sleep(time.Second * 4)
+	}
 	return c.state == 2
 }
 
@@ -158,7 +160,7 @@ func (c *Coordinator) AssignTask(request *Request, reply *Task) error { // 分�
 		reply.MapTaskNum = c.mapTaskNum
 		reply.ReduceTaskNum = c.reduceTaskNum
 		reply.TimeStamp = getTimeStamp()
-		fmt.Println(reply)
+		//fmt.Println(reply)
 		c.fileMutex.Lock()
 		startIng[ID] = struct{}{}
 		c.fileMutex.Unlock()
@@ -169,8 +171,9 @@ func (c *Coordinator) AssignTask(request *Request, reply *Task) error { // 分�
 	return nil
 }
 
-func (c *Coordinator) AskTask(ask *Ask, res *Response) error { // mater处理当前已完成的任务
+func (c *Coordinator) AskTask(ask *Ask, res *Response) error { // master处理当前已完成的任务
 	c.timeMutex.Lock()
+
 	defer func() {
 		c.timeMutex.Unlock()
 	}()
@@ -198,12 +201,16 @@ func (c *Coordinator) AskTask(ask *Ask, res *Response) error { // mater处理当
 	} else {
 		res.OK = false
 	}
-	c.stateMutex.Lock()
-	if len(c.reducedFile) == c.reduceTaskNum {
-		c.state = 2
-	} else if len(c.mappedFile) == c.mapTaskNum {
-		c.state = 1
+	if ask.TimeStamp == -1 { // 表示文件名已经改好，检查是否可以进入新的阶段
+		// 可以进入reduce阶段，否则reduce处理可能会没有文件
+		c.stateMutex.Lock()
+		if len(c.reducedFile) == c.reduceTaskNum {
+			c.state = 2
+		} else if len(c.mappedFile) == c.mapTaskNum {
+			c.state = 1
+		}
+		c.stateMutex.Unlock()
+		return nil
 	}
-	c.stateMutex.Unlock()
 	return nil
 }
