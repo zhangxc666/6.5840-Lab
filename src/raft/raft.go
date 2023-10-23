@@ -173,8 +173,10 @@ type AppendEntriesArgs struct {
 }
 
 type AppendEntriesReply struct {
-	Term    int  // 回复的时间戳
-	Success bool // 是否添加成功
+	Term          int  // 回复的时间戳
+	Success       bool // 是否添加成功
+	ConflictIndex int  // 冲突的索引
+	ConflictTerm  int  // 冲突的term
 }
 
 func max(a, b int) int {
@@ -201,9 +203,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	reply.Term = max(args.Term, rf.curTerm)
 	fmt.Printf("%v收到了来自%v的投票请求，<%v的term是%v，状态是%v>，<%v的term是%v>\n", rf.me, args.CandidateID, rf.me, rf.curTerm, rf.state, args.CandidateID, args.Term)
-	reply.VoteGranted = false
-	defer func() { rf.curTerm = reply.Term }()
 	if args.Term <= rf.curTerm {
+		reply.VoteGranted = false
 		return
 	} else { // 当前request有效
 		if len(rf.log) > 0 {
@@ -211,9 +212,19 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			if (args.LastLogTerm < lastLog.Term) || ((args.LastLogTerm == lastLog.Term) && (args.LastLogIndex < len(rf.log))) { // 选举限制
 				fmt.Printf("args.LastLogTerm = %v, lastLog.Term = %v,args.LastLogIndex = %v ,lastLogIndex = %v\n ", args.LastLogTerm, lastLog.Term, args.LastLogIndex, len(rf.log))
 				fmt.Printf("%v受到选举限制，%v不给%v投票\n", args.CandidateID, rf.me, args.CandidateID)
+				reply.VoteGranted = false
+				if rf.state <= 1 { // candidate or leader
+					rf.votedFor = -1
+					rf.state = follower
+					rf.curTerm = reply.Term
+					rf.resetTimeTicker()
+				} else if rf.state == follower {
+					rf.curTerm = reply.Term
+				}
 				return
 			}
 		}
+		rf.curTerm = reply.Term
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateID
 		if rf.state <= 1 { // candidate 或者 leader
@@ -246,9 +257,24 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = false
 		return
 	}
-	if args.PrevLogIndex > 0 && (args.PrevLogIndex > len(rf.log) || rf.log[args.PrevLogIndex-1].Term != args.PrevLogTerm) { // 如果当前发生冲突
+	if args.PrevLogIndex > 0 && ((args.PrevLogIndex > len(rf.log)) || (rf.log[args.PrevLogIndex-1].Term != args.PrevLogTerm)) { // 如果一致性检查失败
 		reply.Success = false
-
+		if args.PrevLogIndex > len(rf.log) {
+			reply.ConflictIndex = len(rf.log)
+			reply.ConflictTerm = -1
+		} else {
+			reply.ConflictTerm = rf.log[args.PrevLogIndex-1].Term
+			for i, v := range rf.log {
+				if v.Term == reply.ConflictTerm {
+					reply.ConflictIndex = i + 1
+					break
+				}
+			}
+		}
+		if rf.curTerm < args.Term && rf.state <= 1 { // 如果term比它大，而且还是leader or candidate，转变成follower
+			rf.state = follower
+			rf.votedFor = args.LeaderID
+		}
 		rf.resetTimeTicker() // 重置计时器
 		return
 	}
@@ -334,7 +360,19 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	}
 	if reply.Success == false {
 		//if len(args.Entries) > 0 {
-		rf.nextIndex[server] = max(rf.nextIndex[server]-1, 1)
+		//rf.nextIndex[server] = max(rf.nextIndex[server]-1, 1)
+		index := 0
+		for i, v := range rf.log {
+			if v.Term > reply.ConflictTerm {
+				break
+			}
+			index = i + 1
+		}
+		if index > 0 { // 找到了
+			rf.nextIndex[server] = max(index+1, 1)
+		} else {
+			rf.nextIndex[server] = max(1, reply.ConflictIndex)
+		}
 		fmt.Printf("%v一直性检查失败，新的nextIndex是%v\n", server, rf.nextIndex[server])
 		//}
 	} else {
@@ -450,6 +488,8 @@ func (rf *Raft) sendHeartBeats(term int) { // 发送心跳 or log entry
 	}
 	rf.mu.Unlock()
 	replyChan := make(chan int)
+	var mutex sync.Mutex
+	cnt := 0
 	for i := range rf.peers {
 		if i == rf.me {
 			continue
@@ -460,6 +500,12 @@ func (rf *Raft) sendHeartBeats(term int) { // 发送心跳 or log entry
 			//}
 			rf.sendAppendEntries(i, &args[i], &reply[i])
 			replyChan <- i
+			mutex.Lock()
+			cnt++
+			if cnt == len(rf.peers)-1 {
+				close(replyChan)
+			}
+			mutex.Unlock()
 		}(i)
 	}
 	for i := range replyChan {
@@ -481,7 +527,6 @@ func (rf *Raft) sendHeartBeats(term int) { // 发送心跳 or log entry
 				cnt++
 			}
 		}
-		//fmt.Printf("%v的matchIndex = %v, cnt = %v, N = %v, (len(rf.peers) >> 1)=%v, rf.log[N-1].Term = %v, rf.curTerm = %v\n", rf.me, rf.matchIndex, cnt, N, (len(rf.peers) >> 1), rf.log[N-1].Term, rf.curTerm)
 		if (cnt > (len(rf.peers) >> 1)) && (rf.log[N-1].Term == rf.curTerm) {
 			rf.commitIndex = N
 		}
@@ -492,6 +537,12 @@ func (rf *Raft) startHeartBeats(term int) { // 开启心跳
 	for !rf.killed() {
 		select {
 		case <-rf.heartBeatTicker.C:
+			rf.mu.Lock()
+			if rf.state != leader {
+				rf.mu.Unlock()
+				return
+			}
+			rf.mu.Unlock()
 			go rf.sendHeartBeats(term)
 			break
 		}
@@ -518,6 +569,7 @@ func (rf *Raft) startElection(lastTerm int) { // 开启选举过程
 	var mutex sync.Mutex
 	cond := sync.NewCond(&mutex)
 	cnt := 1
+	count := 0
 	for id := range rf.peers { // 请求投票
 		if id == rf.me {
 			continue
@@ -526,9 +578,13 @@ func (rf *Raft) startElection(lastTerm int) { // 开启选举过程
 		go func(id int) { // 投票
 			ok := rf.sendRequestVote(id, &args, &replys[id])
 			if ok == false {
+				mutex.Lock()
+				count++
+				mutex.Unlock()
 				return
 			}
 			mutex.Lock()
+			count++
 			if replys[id].VoteGranted {
 				cnt++
 			}
@@ -541,6 +597,12 @@ func (rf *Raft) startElection(lastTerm int) { // 开启选举过程
 	for {
 		rf.mu.Lock()
 		if cnt <= (n>>1) && rf.state == candidate {
+			if count == len(rf.peers)-1 {
+				fmt.Printf("%v 在%v任期选举失败，退出选举\n", rf.me, rf.curTerm)
+				rf.mu.Unlock()
+				mutex.Unlock()
+				return
+			}
 			rf.mu.Unlock()
 			cond.Wait()
 		} else {

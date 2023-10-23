@@ -2,4 +2,4 @@ pkg/
 api.key
 .api.key.trimmed
 *-handin.tar.gz
-/src/raft/log
+/src/raft/log/
