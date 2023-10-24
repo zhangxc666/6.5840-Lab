@@ -9,7 +9,7 @@ runs=$1
 file=$2
 for i in $(seq 1 $runs); do
     echo '***' Start TESTING in TRIAL $i
-    timeout -k 2s 900s go test -run 2A -race > ./log/lab2A/$file &
+    timeout -k 2s 900s go test -run 2C -race > ./log/lab2C/$file &
     pid=$!
     if ! wait $pid; then
         echo '***' FAILED TESTS IN TRIAL $i

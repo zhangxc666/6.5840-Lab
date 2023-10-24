@@ -3,16 +3,21 @@
 - [x] Lab1  用时20h，四天
 - [x] Lab2A 用时28h，四天，500次测试无一FAIL
 - [x] Lab2B(屎山版v0) 用时三天，忘了多少小时，500次测试无一FAIL
-  - 补丁版v1: 用时2天，15+小时，
-    - [x] 修复了leader发送rpc，未收到reply时，还会继续执行一致性检查回退的bug
-    - [x] 修复了leader收到reply的term>curTerm时，不更新curTerm的bug
-    - [x] 删除了选举限制的更新resetTimerTicker的bug，原因是当前candidate不能成为leader
-    - [x] 修复了当选leader和更新commitIndex的人数问题，应满足大于(len(rf.peers) >> 1)，即仅有两个人时，不能选举成功
-    - [x] 修复了leader仅会提交当前term的日志的bug
-  - 补丁版v2:
-    - [x] 修复了leader变成follower，仍然发心跳的bug
-    - [x] 增加了心跳投票结束机制，当不回复心跳时，会自动结束协程，释放资源
-    - [x] 增加了一致性检查优化算法
-    - [x] 增加了选举过程结束后退出机制
-    - [x] 修复出现选举限制后，即使args.Term > curTerm，leader和candidate也不会变成follower的bug
-    - [x] 修复出现一致性冲突后，即使args.Term > curTerm，leader和candidate也不会变成follower的bug
+- [x] Lab2B(补丁版v1): 用时2天，15+小时，
+  - [x] 修复了leader发送rpc，未收到reply时，还会继续执行一致性检查回退的bug
+  - [x] 修复了leader收到reply的term>curTerm时，不更新curTerm的bug
+  - [x] 删除了选举限制的更新resetTimerTicker的bug，原因是当前candidate不能成为leader
+  - [x] 修复了当选leader和更新commitIndex的人数问题，应满足大于(len(rf.peers) >> 1)，即仅有两个人时，不能选举成功
+  - [x] 修复了leader仅会提交当前term的日志的bug
+- [x] Lab2B(补丁版v2)，1天，10+h，5000次测试有两个FAIL（测试的问题，理论上没问题）
+  - A → B，此时A接受一个命令，但是B还未收到，此时心跳没有到B，B超时，发起选举，之后经过选举限制，A会重新当选Leader，但无法提交之前term的日志，此时测试中也不会给新的命令，一直无法接下来的运行，因为测试中有的是仅当前commit了再向下提交新的命令，所有会一直卡在这里。但在现实情况中是不存在的，因为现实提交不需要等上一个log的commit。
+  - [x] 修复了leader变成follower，仍然发心跳的bug
+  - [x] 增加了心跳投票结束机制，当不回复心跳时，会自动结束协程，释放资源
+  - [x] 增加了一致性检查优化算法
+  - [x] 增加了选举过程结束后退出机制
+  - [x] 修复出现选举限制后，即使args.Term > curTerm，leader和candidate也不会变成follower的bug
+  - [x] 修复出现一致性冲突后，即使args.Term > curTerm，leader和candidate也不会变成follower的bug
+- [x] Lab2C(屎山版v0) 用时10h，主要解决2C和2B的bug。
+  - [x] 修复了labBv2的一致性检查优化的bug，
+  - [x] 修改了matchIndex更新机制，不采用max,同时仅在reply.success=true时再向下进行，否则可能会有数组越界问题，具体出现场景不明
+  - 
