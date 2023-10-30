@@ -7,8 +7,8 @@
   - [x] 修复了leader发送rpc，未收到reply时，还会继续执行一致性检查回退的bug
   - [x] 修复了leader收到reply的term>curTerm时，不更新curTerm的bug
   - [x] 删除了选举限制的更新resetTimerTicker的bug，原因是当前candidate不能成为leader
-  - [x] 修复了当选leader和更新commitIndex的人数问题，应满足大于(len(rf.peers) >> 1)，即仅有两个人时，不能选举成功
-  - [x] 修复了leader仅会提交当前term的日志的bug
+  - [x] 修复了当选leader和更新commitIndex的人数bug，应满足大于(len(rf.peers) >> 1)，即仅有两个人时，不能选举成功
+  - [x] 修复了leader会提交之前term的日志的bug
 - Lab2B(补丁版v2)，1天，10+h，5000次测试有两个FAIL（测试的问题，理论上没问题）
   - A → B，此时A接受一个命令，但是B还未收到，此时心跳没有到B，B超时，发起选举，之后经过选举限制，A会重新当选Leader，但无法提交之前term的日志，此时测试中也不会给新的命令，一直无法接下来的运行，因为测试中有的是仅当前commit了再向下提交新的命令，所有会一直卡在这里。但在现实情况中是不存在的，因为现实提交不需要等上一个log的commit。
   - [x] 修复了leader变成follower，仍然发心跳的bug
@@ -21,3 +21,11 @@
   - [x] 修复了labBv2的一致性检查优化的bug，
   - [x] 修改了matchIndex更新机制，不采用max,同时仅在reply.success=true时再向下进行，否则可能会有数组越界问题，具体出现场景不明
 - Lab2D(屎山版v0) 用时2天，15h，两千次测试无FAIL的，Lab2总用时大约为100h
+- Lab3D(屎山版v0) 用时4天，30h，主要修Lab2的内容，500次测试无fail
+  - [x] 修复了Lab2D中，快照InstallSnapshot响应的bug
+  - [x] 增加了调用start后立即发送给follower发送心跳（会导致rpc乱序问题）
+    - 可能会出现`[1,2,3,4]`先到，`[1,2,3]`后到的这种情况
+  - [x] 修复了Lab2D中，由于rpc乱序问题，导致AppendEntries会删除新的log，被旧的rpc给覆盖
+  - [x] 增加了sendInstallSnapshot的matchIndex和nextIndex更新机制
+  - [x] 修复了在sendAppendEntries中，因为rpc乱序导致nextIndex更新错误的bug
+  - [x] 修复了applyMsg在放到apply chan中的bug，可能会在并发情况下出现log被修改，导致越界或者顺序不一致等问题
