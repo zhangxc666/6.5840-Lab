@@ -59,15 +59,15 @@ func (kv *KVServer) listenApplyChan() {
 				op := msg.Command.(Op)
 				fmt.Printf("[kv:%v] 从 [op:%v] <- Applychan \n", kv.me, op)
 				res, err := kv.applyMsg(op)
-				if _, isLeader := kv.rf.GetState(); isLeader == false { // 不是leader的话，就没有任何rpc等待这个结果
-					continue
+				if term, isLeader := kv.rf.GetState(); isLeader == true && term == msg.CommandTerm { // 不是leader的话，就没有任何rpc等待这个结果
+					// 关于这个解释看readme文档 term == msg.CommandTerm
+					response := Result{
+						value: res, err: err,
+					}
+					ch := kv.getIndexChan(msg.CommandIndex)
+					ch <- response
+					fmt.Printf("[kv:%v] 把 [op:%v] -> RpcHandle \n", kv.me, op)
 				}
-				response := Result{
-					value: res, err: err,
-				}
-				ch := kv.getIndexChan(msg.CommandIndex)
-				ch <- response
-				fmt.Printf("[kv:%v] 把 [op:%v] -> RpcHandle \n", kv.me, op)
 			}
 			break
 		}
@@ -106,6 +106,7 @@ func (kv *KVServer) getIndexChan(index int) chan Result {
 func (kv *KVServer) delIndexChan(index int) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
+	close(kv.indexChan[index])
 	delete(kv.indexChan, index)
 }
 
@@ -122,9 +123,8 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 		return
 	}
 	ch := kv.getIndexChan(index)
-	timer := time.NewTimer(time.Second * 1)
+	timer := time.NewTimer(time.Millisecond * 1000)
 	defer func() {
-		close(ch)
 		kv.delIndexChan(index)
 		timer.Stop()
 	}()
@@ -154,9 +154,8 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		return
 	}
 	ch := kv.getIndexChan(index)
-	timer := time.NewTimer(time.Second * 1)
+	timer := time.NewTimer(time.Millisecond * 1000)
 	defer func() {
-		close(ch)
 		kv.delIndexChan(index)
 		timer.Stop()
 	}()

@@ -21,7 +21,7 @@
   - [x] 修复了labBv2的一致性检查优化的bug，
   - [x] 修改了matchIndex更新机制，不采用max,同时仅在reply.success=true时再向下进行，否则可能会有数组越界问题，具体出现场景不明
 - Lab2D(屎山版v0) 用时2天，15h，两千次测试无FAIL的，Lab2总用时大约为100h
-- Lab3D(屎山版v0) 用时4天，30h，主要修Lab2的内容，500次测试无fail
+- Lab3A(屎山版v0) 用时4天，30h，主要修Lab2的内容，500次测试无fail
   - [x] 修复了Lab2D中，快照InstallSnapshot响应的bug
   - [x] 增加了调用start后立即发送给follower发送心跳（会导致rpc乱序问题）
     - 可能会出现`[1,2,3,4]`先到，`[1,2,3]`后到的这种情况
@@ -29,3 +29,7 @@
   - [x] 增加了sendInstallSnapshot的matchIndex和nextIndex更新机制
   - [x] 修复了在sendAppendEntries中，因为rpc乱序导致nextIndex更新错误的bug
   - [x] 修复了applyMsg在放到apply chan中的bug，可能会在并发情况下出现log被修改，导致越界或者顺序不一致等问题
+- Lab3A(补丁版v1) 同时1天，主要搜集资料
+  - [x] 修复了关闭channel未加锁的bug
+  - [x] 修复了channel关闭后，再次关闭的bug
+    - 多次测试仍然有bug，原因是因为关闭一个已经关闭的channel，出现这种情况的原因可能是因为client->leader发起一个请求，此时leader变成follower了无法给client响应，过了一会又重新当选leader，此时client又重新给这个leader发起请求，由于都是相同的index，且上一个channel还在等待结果，最终就造成了两次rpc请求都对应着同一个channel，所以可能会出现多次关闭的情况。对此这种情况的解决办法是，仅通知当前term的命令，之前的命令就不会通知给client了，让之前的接受命令的rpc超时即可
