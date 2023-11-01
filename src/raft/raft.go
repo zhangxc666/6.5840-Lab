@@ -20,6 +20,8 @@ package raft
 import (
 	"6.5840/labgob"
 	"bytes"
+	"fmt"
+
 	//	"bytes"
 	"math/rand"
 	"sync"
@@ -40,9 +42,12 @@ import (
 // snapshots) on the applyCh, but set CommandValid to false for these
 // other uses.
 const (
-	candidate = 0
-	leader    = 1
-	follower  = 2
+	candidate        = 0
+	leader           = 1
+	follower         = 2
+	ElectionTimeout  = 300
+	HeartBeatTimeout = 150
+	ApplyTimeout     = 30
 )
 
 type ApplyMsg struct {
@@ -89,6 +94,10 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
+}
+
+func (rf *Raft) GetRaftStateSize() int { // 给kvserver调用的接口
+	return rf.persister.RaftStateSize()
 }
 
 // return currentTerm and whether this server
@@ -167,7 +176,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	}
 	back := make([]Entry, len(rf.log[index-rf.lastIncludeIndex:]))
 	copy(back, rf.log[index-rf.lastIncludeIndex:])
-	rf.snapshot = snapshot
+	rf.snapshot = clone(snapshot)
 	rf.lastIncludeTerm = rf.log[index-rf.lastIncludeIndex-1].Term
 	rf.log = back
 	rf.lastIncludeIndex = index
@@ -259,7 +268,7 @@ func (rf *Raft) convertToLeader() { // 转换到leader
 		rf.matchIndex[i] = 0
 	}
 	rf.persist()
-	rf.heartBeatTicker.Reset(time.Millisecond * 50) // 开启心跳计时器
+	rf.heartBeatTicker.Reset(HeartBeatTimeout * time.Millisecond) // 开启心跳计时器
 }
 
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
@@ -314,7 +323,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	applymsg := ApplyMsg{
 		CommandValid:  false,
 		SnapshotValid: true,
-		Snapshot:      rf.snapshot,
+		Snapshot:      clone(rf.snapshot),
 		SnapshotIndex: rf.lastIncludeIndex,
 		SnapshotTerm:  rf.lastIncludeTerm,
 	}
@@ -447,7 +456,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			} else {
 
 			}
-			//fmt.Printf("%v 接受了 %v发送的log，当前log的长度为%v\n", rf.me, args.LeaderID, len(rf.log))
+			fmt.Printf("%v 接受了 %v发送的log，当前log的长度为%v\n", rf.me, args.LeaderID, len(rf.log))
 		}
 	}
 	if args.LeaderCommit > rf.commitIndex { // leader多提交了log
@@ -606,7 +615,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) { // 接受来自cli
 }
 
 func (rf *Raft) resetHeartBeats() {
-	rf.heartBeatTicker.Reset(time.Millisecond * 50)
+	rf.heartBeatTicker.Reset(time.Millisecond * HeartBeatTimeout)
 }
 
 // the tester doesn't halt goroutines created by Raft after each test,
@@ -629,7 +638,7 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 func (rf *Raft) resetTimeTicker() { // 重置选举计时器
-	ms := 150 + (rand.Int63() % 150)
+	ms := ElectionTimeout + (rand.Int63() % ElectionTimeout)
 	rf.timeTicker.Reset(time.Duration(ms) * time.Millisecond)
 	return
 }
@@ -659,7 +668,7 @@ func (rf *Raft) applyMsg() {
 		} else {
 			rf.mu.Unlock()
 		}
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * ApplyTimeout)
 	}
 }
 
@@ -892,8 +901,8 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
-	rf.timeTicker = time.NewTicker(time.Millisecond * 350)
-	rf.heartBeatTicker = time.NewTicker(time.Millisecond * 50)
+	rf.timeTicker = time.NewTicker(time.Millisecond * ElectionTimeout)
+	rf.heartBeatTicker = time.NewTicker(time.Millisecond * HeartBeatTimeout)
 	rf.state = follower
 	rf.votedFor = -1
 	rf.log = []Entry{}

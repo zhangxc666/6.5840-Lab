@@ -33,3 +33,7 @@
   - [x] 修复了关闭channel未加锁的bug
   - [x] 修复了channel关闭后，再次关闭的bug
     - 多次测试仍然有bug，原因是因为关闭一个已经关闭的channel，出现这种情况的原因可能是因为client->leader发起一个请求，此时leader变成follower了无法给client响应，过了一会又重新当选leader，此时client又重新给这个leader发起请求，由于都是相同的index，且上一个channel还在等待结果，最终就造成了两次rpc请求都对应着同一个channel，所以可能会出现多次关闭的情况。对此这种情况的解决办法是，仅通知当前term的命令，之前的命令就不会通知给client了，让之前的接受命令的rpc超时即可
+- Lab3B(屎山版v0) 用时2天，20+h。仍然会有百分之一的概率出现bug，具体原因不明，应该是raft层的bug，暂时不修复了。。。
+  - [x] 异步提交执行结果给通道，增加并发度
+  - [x] 修改了raft的选举时间和心跳时间
+  - [x] 将结果返回给rpc时加锁

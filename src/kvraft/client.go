@@ -2,7 +2,6 @@ package kvraft
 
 import (
 	"6.5840/labrpc"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -57,7 +56,7 @@ func (ck *Clerk) Get(key string) string {
 	for i := leaderID; ; {
 		server := ck.servers[i]
 		reply := GetReply{}
-		fmt.Printf("client[%d] -> Server[%d] [GET请求] [key:%v]\n", ck.clientId, i, key)
+		//fmt.Printf("client[%d] -> Server[%d] [GET请求] [key:%v]\n", ck.clientId, i, key)
 		ok := server.Call("KVServer.Get", &args, &reply)
 		if reply.Err == ErrWrongLeader || ok == false || reply.Err == ErrTimeOut {
 			i++
@@ -69,7 +68,7 @@ func (ck *Clerk) Get(key string) string {
 		}
 		ck.mutex.Lock()
 		ck.leaderID = i
-		fmt.Printf("client[%d] <- Server[%d] [Get响应] [status:%s] [LeaderID:%d] [key:%v] [value:%v]\n", ck.clientId, i, reply.Err, reply.LeaderID, key, reply.Value)
+		//fmt.Printf("client[%d] <- Server[%d] [Get响应] [status:%s] [LeaderID:%d] [key:%v] [value:%v]\n", ck.clientId, i, reply.Err, reply.LeaderID, key, reply.Value)
 		ck.mutex.Unlock()
 		if reply.Err == ErrNoKey {
 			return ""
@@ -115,7 +114,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		}
 		ck.mutex.Lock()
 		ck.leaderID = i
-		fmt.Printf("client[%d] <- Server[%d] [%s响应]，[status:%s] [LeaderID:%d] [key:%v]\n", ck.clientId, i, op, reply.Err, ck.leaderID, key)
+		//fmt.Printf("client[%d] <- Server[%d] [%s响应]，[status:%s] [LeaderID:%d] [key:%v]\n", ck.clientId, i, op, reply.Err, ck.leaderID, key)
 		ck.mutex.Unlock()
 		return
 	}
