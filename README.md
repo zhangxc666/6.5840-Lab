@@ -29,7 +29,7 @@
   - [x] 增加了sendInstallSnapshot的matchIndex和nextIndex更新机制
   - [x] 修复了在sendAppendEntries中，因为rpc乱序导致nextIndex更新错误的bug
   - [x] 修复了applyMsg在放到apply chan中的bug，可能会在并发情况下出现log被修改，导致越界或者顺序不一致等问题
-- Lab3A(补丁版v1) 同时1天，主要搜集资料
+- Lab3A(补丁版v1) 同时1天
   - [x] 修复了关闭channel未加锁的bug
   - [x] 修复了channel关闭后，再次关闭的bug
     - 多次测试仍然有bug，原因是因为关闭一个已经关闭的channel，出现这种情况的原因可能是因为client->leader发起一个请求，此时leader变成follower了无法给client响应，过了一会又重新当选leader，此时client又重新给这个leader发起请求，由于都是相同的index，且上一个channel还在等待结果，最终就造成了两次rpc请求都对应着同一个channel，所以可能会出现多次关闭的情况。对此这种情况的解决办法是，仅通知当前term的命令，之前的命令就不会通知给client了，让之前的接受命令的rpc超时即可
@@ -38,6 +38,6 @@
   - [x] 修改了raft的选举时间和心跳时间
   - [x] 将结果返回给rpc时加锁
 - Lab3B(补丁版v1) 用时1天，8h 1500次测试无FAIL，完美！！
-  - 修复了一致性检查的bug，当args.PrevLogIndex > rf.lastLogIndex时，conflictIndex应该为rf.lastLogIndex+1
-  - 修复了AppendEntries中对于args.PrevLogIndex < rf.lastIncludeIndex讨论错误的bug，需要特判args.PrevLogIndex < rf.lastIncludeIndex这种情况特殊处理
+  - [x] 修复了一致性检查的bug，当args.PrevLogIndex > rf.lastLogIndex时，conflictIndex应该为rf.lastLogIndex+1
+  - [x] 修复了AppendEntries中对于args.PrevLogIndex < rf.lastIncludeIndex讨论错误的bug，需要特判args.PrevLogIndex < rf.lastIncludeIndex这种情况特殊处理
   
