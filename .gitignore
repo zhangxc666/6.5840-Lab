@@ -4,3 +4,4 @@ api.key
 *-handin.tar.gz
 /src/raft/log/
 /src/kvraft/log/
+/src/kvraft/main/

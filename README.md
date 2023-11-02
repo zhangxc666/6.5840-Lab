@@ -37,3 +37,7 @@
   - [x] 异步提交执行结果给通道，增加并发度
   - [x] 修改了raft的选举时间和心跳时间
   - [x] 将结果返回给rpc时加锁
+- Lab3B(补丁版v1) 用时1天，8h 1500次测试无FAIL，完美！！
+  - 修复了一致性检查的bug，当args.PrevLogIndex > rf.lastLogIndex时，conflictIndex应该为rf.lastLogIndex+1
+  - 修复了AppendEntries中对于args.PrevLogIndex < rf.lastIncludeIndex讨论错误的bug，需要特判args.PrevLogIndex < rf.lastIncludeIndex这种情况特殊处理
+  
