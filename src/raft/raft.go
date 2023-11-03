@@ -285,25 +285,22 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			rf.votedFor = args.LeaderID
 		}
 	}
-	if args.LastIncludeIndex < rf.lastIncludeIndex {
-		if rf.curTerm < args.Term {
-			rf.persist()
-		}
+	if args.LastIncludeIndex < rf.commitIndex {
 		reply.Term = rf.curTerm
+		rf.persist()
 		rf.resetTimeTicker()
 		rf.mu.Unlock()
 		return
 	}
 
 	if rf.lastIncludeIndex == args.LastIncludeIndex && rf.lastIncludeTerm == args.LastIncludeTerm {
-		if rf.curTerm < args.Term {
-			rf.persist()
-		}
 		reply.Term = rf.curTerm
+		rf.persist()
 		rf.resetTimeTicker()
 		rf.mu.Unlock()
 		return
 	}
+
 	lastLogIndex := rf.lastIncludeIndex + len(rf.log)
 	if lastLogIndex <= args.LastIncludeIndex {
 		rf.log = make([]Entry, 0)
@@ -454,6 +451,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		if args.PrevLogIndex+len(args.Entries) <= rf.lastIncludeIndex {
 			fmt.Printf("[%d]收到一条过期的log, args.PrevLogIndex=%v,len(args.Entries)=%v, rf.lastIncludeIndex=%v\n", rf.me, args.PrevLogIndex, len(args.Entries), rf.lastIncludeIndex)
 			reply.Success = true
+			rf.persist()
 			return
 		}
 		trim := rf.lastIncludeIndex - args.PrevLogIndex // 多余的部分
@@ -473,7 +471,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			// 再收到12，此时12丢弃，原来的版本错误了
 		} else { //
 			if rf.lastIncludeIndex <= args.PrevLogIndex {
-				rf.log = rf.log[0 : args.PrevLogIndex-rf.lastIncludeIndex] // append新的log
+				back := make([]Entry, len(rf.log[0:args.PrevLogIndex-rf.lastIncludeIndex]))
+				copy(back, rf.log[0:args.PrevLogIndex-rf.lastIncludeIndex])
+				rf.log = back // append新的log
 				for i, _ := range args.Entries {
 					rf.log = append(rf.log, args.Entries[i])
 				}
@@ -668,7 +668,7 @@ func (rf *Raft) resetTimeTicker() { // 重置选举计时器
 func (rf *Raft) applyMsg() {
 	for rf.killed() == false {
 		rf.mu.Lock()
-		fmt.Printf("%v 当前应用命令，commitIndex是%v，lastApplied是%v,lastIncludeIndex: %v\n", rf.me, rf.commitIndex, rf.lastApplied, rf.lastIncludeIndex)
+		//fmt.Printf("%v 当前应用命令，commitIndex是%v，lastApplied是%v,lastIncludeIndex: %v\n", rf.me, rf.commitIndex, rf.lastApplied, rf.lastIncludeIndex)
 		if rf.commitIndex > rf.lastApplied {
 			fmt.Printf("%v 当前应用命令，commitIndex是%v，lastApplied是%v，lastIncludeIndex: %v,log的长度是%v\n", rf.me, rf.commitIndex, rf.lastApplied, rf.lastIncludeIndex, len(rf.log))
 			msgList := []ApplyMsg{}

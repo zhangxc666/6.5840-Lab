@@ -40,4 +40,7 @@
 - Lab3B(补丁版v1) 用时1天，8h 1500次测试无FAIL，完美！！
   - [x] 修复了一致性检查的bug，当args.PrevLogIndex > rf.lastLogIndex时，conflictIndex应该为rf.lastLogIndex+1
   - [x] 修复了AppendEntries中对于args.PrevLogIndex < rf.lastIncludeIndex讨论错误的bug，需要特判args.PrevLogIndex < rf.lastIncludeIndex这种情况特殊处理
+- Lab3B(补丁版v2) 用时1天，3h
+  - [x] 修复了InstallSnapshot部分情况未持久化的bug
+  - [x] 修复了msg.CommandIndex <= kv.lastApplied时直接return的bug
   

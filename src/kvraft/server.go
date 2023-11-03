@@ -93,7 +93,7 @@ func (kv *KVServer) listenApplyChan() {
 					// 违背了线性一致
 					// 应该要保证不执行快照之前的命令
 					fmt.Printf("[kv:%v] 得到了一条过期命令 [command:%v] 当前命令index = %v，kv.lastApplyIndex = %v\n", kv.me, msg.Command, msg.CommandIndex, kv.lastApplied)
-					return
+					continue
 				}
 				kv.lastApplied = msg.CommandIndex
 				op := msg.Command.(Op)
@@ -111,7 +111,7 @@ func (kv *KVServer) listenApplyChan() {
 					kv.mu.Unlock()
 					//fmt.Printf("[kv:%v] 把 [op:%v] -> RpcHandle \n", kv.me, op)
 				}
-				if kv.maxraftstate < kv.rf.GetRaftStateSize() && kv.maxraftstate != -1 { // 超过了
+				if kv.maxraftstate <= kv.rf.GetRaftStateSize() && kv.maxraftstate != -1 { // 超过了
 					fmt.Printf("[kv:%v] [snapshot] \n [data:%v]\n", kv.me, kv.dataBase)
 					kv.lastApplied = msg.CommandIndex
 					w := new(bytes.Buffer)
